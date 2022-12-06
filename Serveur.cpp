@@ -19,10 +19,18 @@ TAB_CONNEXIONS *tab;
 
 void afficheTab();
 
+void handlerSIGINT(int sig);
+
 int main()
 {
   // Armement des signaux
   // TO DO
+  //Armement de sigint pour pouvoir couper le serveur et la file de msg en meme temps
+   struct sigaction A;
+  A.sa_handler = handlerSIGINT;
+  A.sa_flags = 0;
+  sigaction(SIGINT,&A,NULL);
+
 
   // Creation des ressources
   // Creation de la file de message
@@ -75,10 +83,28 @@ int main()
     {
       case CONNECT :  // TO DO
                       fprintf(stderr,"(SERVEUR %d) Requete CONNECT reçue de %d\n",getpid(),m.expediteur);
+
+                      for (int i=0 ; i<6 ; i++)
+                      {
+                        if(tab->connexions[i].pidFenetre == 0)
+                          {
+                            tab->connexions[i].pidFenetre = m.expediteur ;
+                            i=6;
+                          }
+                      }
                       break;
 
       case DECONNECT : // TO DO
                       fprintf(stderr,"(SERVEUR %d) Requete DECONNECT reçue de %d\n",getpid(),m.expediteur);
+
+                       for (int i=0 ; i<6 ; i++)
+                      {
+                        if(tab->connexions[i].pidFenetre == m.expediteur)
+                          {
+                            tab->connexions[i].pidFenetre = 0 ;
+                            i=6;
+                          }
+                      }                     
                       break;
       case LOGIN :    // TO DO
                       fprintf(stderr,"(SERVEUR %d) Requete LOGIN reçue de %d : --%d--%s--%s--\n",getpid(),m.expediteur,m.data1,m.data2,m.data3);
@@ -135,3 +161,12 @@ void afficheTab()
   fprintf(stderr,"\n");
 }
 
+
+//definition de sigint 
+void handlerSIGINT(int sig)
+{
+
+   msgctl(idQ,IPC_RMID,NULL);
+   exit(1);
+  
+}
