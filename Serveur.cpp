@@ -13,6 +13,7 @@
 #include <unistd.h>
 #include "protocole.h" // contient la cle et la structure d'un message
 
+#include "FichierClient.h"
 int idQ,idShm,idSem;
 int fdPipe[2];
 TAB_CONNEXIONS *tab;
@@ -102,15 +103,93 @@ int main()
                         if(tab->connexions[i].pidFenetre == m.expediteur)
                           {
                             tab->connexions[i].pidFenetre = 0 ;
+                            
                             i=6;
                           }
                       }                     
                       break;
       case LOGIN :    // TO DO
+
+
+                      if (m.data1==1)
+                        {
+                          if (estPresent(m.data2)>0)
+                          {
+                            strcpy(m.data4,"«Client  déjà  existant!»");
+                            m.data1=0;
+                            }
+                          else 
+                          {
+                            strcpy(m.data4,"«Nouveau client créé:bienvenue!»");
+
+                              for (int i=0 ; i<6 ; i++)
+                              {
+                                if(tab->connexions[i].pidFenetre == m.expediteur)
+                                  {
+                                   strcpy(tab->connexions[i].nom,m.data2);
+                                    i=6;
+                                  }
+                              } 
+                              ajouteClient(m.data2 ,m.data3);
+                              m.data1=1;
+                            
+                          }
+                        }
+                        else 
+                        {
+                          if (estPresent(m.data2)>0)
+                          {
+                              if (verifieMotDePasse(estPresent(m.data2), m.data3 )==1)
+                              {
+                                strcpy(m.data4,"«Re-bonjour cher client!»");
+                                  for (int i=0 ; i<6 ; i++)
+                                  {
+                                    if(tab->connexions[i].pidFenetre == m.expediteur)
+                                      {
+                                       strcpy(tab->connexions[i].nom,m.data2);
+                                        i=6;
+                                      }
+                                  } 
+                                  m.data1=1;
+                              }
+                              else 
+                              {
+                                 strcpy(m.data4,"«Mot  de passe incorrect...»");
+                                 m.data1=0;
+                              }
+                          }
+                          else 
+                          {
+                            strcpy(m.data4,"«Client Inconnu ...»");
+                            m.data1=0;
+                          }
+
+                        }
+
+                        m.type=m.expediteur;
+                         if(msgsnd(idQ,&m,sizeof(MESSAGE)-sizeof(long),0)==-1)
+                          {
+                            perror("erreur d'envoi");
+                            msgctl(idQ,IPC_RMID,NULL);
+                            exit(1);
+                          }
+                          kill(m.type,SIGUSR1);
+
+
+
                       fprintf(stderr,"(SERVEUR %d) Requete LOGIN reçue de %d : --%d--%s--%s--\n",getpid(),m.expediteur,m.data1,m.data2,m.data3);
                       break; 
 
       case LOGOUT :   // TO DO
+
+                      for (int i=0 ; i<6 ; i++)
+                      {
+                        if(tab->connexions[i].pidFenetre == m.expediteur)
+                          {
+                           strcpy(tab->connexions[i].nom,"");
+                            i=6;
+                          }
+                      } 
                       fprintf(stderr,"(SERVEUR %d) Requete LOGOUT reçue de %d\n",getpid(),m.expediteur);
                       break;
 
