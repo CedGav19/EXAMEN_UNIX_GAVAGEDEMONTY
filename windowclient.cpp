@@ -55,18 +55,28 @@ WindowClient::WindowClient(QWidget *parent) : QMainWindow(parent), ui(new Ui::Wi
   } 
 
     // Recuperation de l'identifiant de la mémoire partagée
-    //fprintf(stderr,"(CLIENT %d) Recuperation de l'id de la mémoire partagée\n",getpid());
+    fprintf(stderr,"(CLIENT %d) Recuperation de l'id de la mémoire partagée\n",getpid());
     // TO DO
 
+    if ((idShm=shmget(CLE ,0,0))==-1)
+    {
+       perror("(PUBLICITE) Erreur de shmget");
+      exit(1);
+    }
     // Attachement à la mémoire partagée
     // TO DO
-
+    pShm = (char*)shmat(idShm,NULL,0);
     // Armement des signaux
     // TO DO
      struct sigaction A;
     A.sa_handler = handlerSIGUSR1;
     A.sa_flags = 0;
     sigaction(SIGUSR1,&A,NULL);
+
+    struct sigaction B;
+    B.sa_handler = handlerSIGUSR2;
+    B.sa_flags = 0;
+    sigaction(SIGUSR2,&B,NULL);
 
     // Envoi d'une requete de connexion au serveur
     // TO DO
@@ -350,8 +360,6 @@ void WindowClient::closeEvent(QCloseEvent *event)
   }
   // Envoi d'une requete de deconnexion au serveur
      
-  
-      
       msg.requete= DECONNECT ;
 
       if(msgsnd(idQ,&msg,sizeof(MESSAGE)-sizeof(long),0)==-1)
@@ -386,13 +394,6 @@ void WindowClient::on_pushButtonLogin_clicked()
         msgctl(idQ,IPC_RMID,NULL);
         exit(1);
       }
-
-
-
-
-     
-
-
 
     // TO DO
 }
@@ -533,4 +534,12 @@ void handlerSIGUSR1(int sig)
     }
 }
 
+
+
+void handlerSIGUSR2(int sig)
+{
+  w->setPublicite(pShm);
+
+
+}
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////

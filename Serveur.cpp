@@ -14,7 +14,7 @@
 #include "protocole.h" // contient la cle et la structure d'un message
 
 #include "FichierClient.h"
-int idQ,idShm,idSem;
+int idQ,idShm,idSem,idfilspub,idfilsbdd;
 int fdPipe[2];
 TAB_CONNEXIONS *tab;
 
@@ -36,9 +36,17 @@ int main()
   // Creation des ressources
   // Creation de la file de message
   fprintf(stderr,"(SERVEUR %d) Creation de la file de messages\n",getpid());
-  if ((idQ = msgget(CLE,IPC_CREAT | IPC_EXCL | 0600)) == -1)  // CLE definie dans protocole.h
+  if ((idQ = msgget(CLE,IPC_CREAT | IPC_EXCL | 0666)) == -1)  // CLE definie dans protocole.h
   {
     perror("(SERVEUR) Erreur de msgget");
+    exit(1);
+  }
+  fprintf(stderr,"(SERVEUR %d) Creation de la mem partagee\n",getpid());
+  // creation de la memoire partagée 
+
+  if((idShm=shmget(CLE,52,IPC_CREAT | IPC_EXCL | 0666)) == -1) // 52 car taille de 52 carcatere 
+  {
+    perror("(SERVEUR) Erreur de memoire partagée ");
     exit(1);
   }
 
@@ -63,6 +71,16 @@ int main()
 
   // Creation du processus Publicite (étape 2)
   // TO DO
+
+  idfilspub=fork();
+  if (idfilspub==0)
+  {
+    if(execl("./Publicite", "Publicite", NULL) == -1)
+    {
+      perror("erreur lors de la pub");
+    }
+
+  }
 
   // Creation du processus AccesBD (étape 4)
   // TO DO
@@ -194,6 +212,12 @@ int main()
                       break;
 
       case UPDATE_PUB :  // TO DO
+                        printf("reception de updatepub");
+                        for (int i = 0 ; i<6; i++)
+                        {
+                          if (tab->connexions[i].pidFenetre!=0)kill(tab->connexions[i].pidFenetre, SIGUSR2);
+                        }
+                        
                       break;
 
       case CONSULT :  // TO DO
@@ -244,7 +268,8 @@ void afficheTab()
 //definition de sigint 
 void handlerSIGINT(int sig)
 {
-
+  kill(idfilspub,SIGINT);
+  shmctl(idShm,IPC_RMID,NULL);
    msgctl(idQ,IPC_RMID,NULL);
    exit(1);
   

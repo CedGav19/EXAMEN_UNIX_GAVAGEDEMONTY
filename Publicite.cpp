@@ -20,8 +20,14 @@ int fd;
 
 int main()
 {
+  MESSAGE msg ;
+  char tmpchar ;
   // Armement des signaux
   // TO DO
+    struct sigaction A;
+  A.sa_handler = handlerSIGUSR1;
+  A.sa_flags = 0;
+  sigaction(SIGUSR1,&A,NULL);
 
   // Masquage des signaux
   sigset_t mask;
@@ -30,7 +36,7 @@ int main()
   sigprocmask(SIG_SETMASK,&mask,NULL);
 
   // Recuperation de l'identifiant de la file de messages
-  fprintf(stderr,"(PUBLICITE %d) Recuperation de l'id de la file de messages\n",getpid());
+ fprintf(stderr,"(PUBLICITE %d) Recuperation de l'id de la file de messages\n",getpid());
   if ((idQ = msgget(CLE,0)) == -1)
   {
     perror("(PUBLICITE) Erreur de msgget");
@@ -39,8 +45,15 @@ int main()
 
   // Recuperation de l'identifiant de la mémoire partagée
 
+  if ((idShm=shmget(CLE ,0,0))==-1)
+  {
+     perror("(PUBLICITE) Erreur de shmget");
+    exit(1);
+  }
+
+
   // Attachement à la mémoire partagée
-  pShm = (char*)malloc(52); // a supprimer et remplacer par ce qu'il faut
+  pShm = (char*)shmat(idShm,NULL,0); // 0pour lecture et ecriture , NULL car on choisit pas soi meme une adresse! 
 
   // Mise en place de la publicité en mémoire partagée
   char pub[51];
@@ -53,9 +66,27 @@ int main()
 
   while(1)
   {
+   printf("tour de boucle \n");
     // Envoi d'une requete UPDATE_PUB au serveur
+  msg.type=1 ;
+  msg.expediteur=getpid();
+  msg.requete=UPDATE_PUB;
 
+  if(msgsnd(idQ,&msg,sizeof(MESSAGE)-sizeof(long),0)==-1)
+      {
+        perror("erreur d'envoi");
+        msgctl(idQ,IPC_RMID,NULL);
+        exit(1);
+      }
+        
     sleep(1); 
+
+    tmpchar =pShm[0];
+    for (int i=0;i<50;i++)
+    {
+      pShm[i]=pShm[i+1];
+    }
+    pShm[50]=tmpchar;
 
     // Decallage vers la gauche
   }
