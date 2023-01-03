@@ -12,6 +12,10 @@
 #include <unistd.h>
 #include <signal.h>
 #include <mysql.h>
+#include <string>
+#include <cstring>
+#include <strings.h>
+
 #include "protocole.h" // contient la cle et la structure d'un message
 
 int idQ;
@@ -21,6 +25,7 @@ int nbArticles = 0;
 
 int fdWpipe;
 int pidClient;
+int stock ;
 
 MYSQL* connexion;
 
@@ -43,7 +48,6 @@ int main(int argc,char* argv[])
     perror("(CADDIE) Erreur de msgget");
     exit(1);
   }
-
   // Connexion à la base de donnée
   connexion = mysql_init(NULL);
   if (mysql_real_connect(connexion,"localhost","Student","PassStudent1_","PourStudent",0,0,0) == NULL)
@@ -51,7 +55,6 @@ int main(int argc,char* argv[])
     fprintf(stderr,"(SERVEUR) Erreur de connexion à la base de données...\n");
     exit(1);  
   }
-
 
   MESSAGE m;
   MESSAGE reponse;
@@ -62,8 +65,8 @@ int main(int argc,char* argv[])
   MYSQL_ROW  Tuple;
 
   // Récupération descripteur écriture du pipe
-  fdWpipe = atoi(argv[1]);
-
+  //fdWpipe = atoi(argv[1]);
+  
   while(1)
   {
     if (msgrcv(idQ,&m,sizeof(MESSAGE)-sizeof(long),getpid(),0) == -1)
@@ -80,10 +83,62 @@ int main(int argc,char* argv[])
 
       case LOGOUT :   // TO DO
                       fprintf(stderr,"(CADDIE %d) Requete LOGOUT reçue de %d\n",getpid(),m.expediteur);
+                      exit(1);
                       break;
 
       case CONSULT :  // TO DO
                       fprintf(stderr,"(CADDIE %d) Requete CONSULT reçue de %d\n",getpid(),m.expediteur);
+                      pidClient = m.expediteur;
+                       
+                        // acces a sql semblable a php de 1ere
+                      sprintf(requete,"select * from UNIX_FINAL where id = %d", m.data1);
+                      if (mysql_query(connexion, requete) != 0)
+                      {
+                        fprintf (stderr, "Erreur de Mysql-query");
+                      }
+
+                      if((resultat = mysql_store_result(connexion)) == NULL)
+                      {
+                        fprintf (stderr,"Erreur de mysql store");
+                      }
+
+                      if ((Tuple = mysql_fetch_row(resultat)) != NULL)
+                      {
+                        
+                        reponse.requete=CONSULT ;
+                        reponse.type = pidClient;
+                        
+
+                        reponse.expediteur = getpid();
+                        
+                        reponse.data1 = atoi(Tuple[0]);
+                        strcpy(reponse.data2, Tuple[1]);
+                        strcpy(reponse.data4, Tuple[4]);
+                        strcpy(reponse.data3, Tuple[3]);
+                        reponse.data5= atof(Tuple[2]);
+
+                        /*char Prix[20];
+                        strcpy(Prix, Tuple[2]);
+                        String tmp4(Prix);
+                        size_t x = tmp4.find(",");
+                        if (x != String::npos) tmp4.replace(x,1,".");
+                        
+                        reponse.data5 = atof(tmp4.c_str());*/
+
+
+
+                      fprintf(stderr,"(CADDIE %d) Requete CONSULT envoyé a %d\n",getpid(),reponse.type);
+                        if ((stock = atoi(reponse.data3)) > 0);
+                          {
+                            if(msgsnd(idQ,&reponse,sizeof(MESSAGE)-sizeof(long),0) == -1)
+                            {
+                              perror("(Caddie) Erreur de msgsnd");
+                              msgctl(idQ,IPC_RMID,NULL);
+                              exit(1);
+                            }
+                            kill(pidClient, SIGUSR1);
+                          }
+                      }
                       break;
 
       case ACHAT :    // TO DO

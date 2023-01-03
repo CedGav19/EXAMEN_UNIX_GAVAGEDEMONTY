@@ -174,16 +174,10 @@ void MainWindowEx4::on_pushButtonDemarrerTraitements_clicked()
   // TO DO
 
 
-
-
-
-
  /* int fd=open("Trace.log",O_WRONLY |O_CREAT |O_APPEND);
   dup2(fd,2);*/
 
 
-
-  
   // TO DO
   
  

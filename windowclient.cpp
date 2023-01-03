@@ -100,8 +100,8 @@ WindowClient::WindowClient(QWidget *parent) : QMainWindow(parent), ui(new Ui::Wi
       }
 
     // Exemples à supprimer
-    setPublicite("Promotions sur les concombres !!!");
-    setArticle("pommes",5.53,18,"pommes.jpg");
+    
+    //setArticle("pommes",5.53,18,"pommes.jpg");
     ajouteArticleTablePanier("cerises",8.96,2);
 }
 
@@ -428,6 +428,19 @@ void WindowClient::on_pushButtonSuivant_clicked()
 {
     // TO DO (étape 3)
     // Envoi d'une requete CONSULT au serveur
+  MESSAGE  msg ;
+  msg.type = 1;
+  msg.requete = CONSULT;
+  msg.expediteur = getpid();
+  msg.data1 = (articleEnCours.id+1);
+
+
+  if (msgsnd(idQ,&msg,sizeof(MESSAGE)-sizeof(long),0) == -1)
+  {
+      perror("(Client) Erreur de msgsnd");
+      msgctl(idQ,IPC_RMID,NULL);
+      exit(1);
+  }
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -435,6 +448,19 @@ void WindowClient::on_pushButtonPrecedent_clicked()
 {
     // TO DO (étape 3)
     // Envoi d'une requete CONSULT au serveur
+  MESSAGE  msg ;
+  msg.type = 1;
+  msg.requete = CONSULT;
+  msg.expediteur = getpid();
+  msg.data1 = (articleEnCours.id-1);
+
+
+  if (msgsnd(idQ,&msg,sizeof(MESSAGE)-sizeof(long),0) == -1)
+  {
+      perror("(Client) Erreur de msgsnd");
+      msgctl(idQ,IPC_RMID,NULL);
+      exit(1);
+  }
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -496,24 +522,47 @@ void WindowClient::on_pushButtonPayer_clicked()
 void handlerSIGUSR1(int sig)
 {
     MESSAGE m;
-  
-    if (msgrcv(idQ,&m,sizeof(MESSAGE)-sizeof(long),getpid(),0) != -1)  // !!! a modifier en temps voulu !!!
-    {
+    
+    if (msgrcv(idQ,&m,sizeof(MESSAGE)-sizeof(long),getpid(),IPC_NOWAIT) != -1)  // !!! a modifier en temps voulu !!!
+    {fprintf(stderr,"(CLIENT %d) Reception d'une requete  de %d\n",getpid(),m.expediteur  );
       switch(m.requete)
       {
         case LOGIN :
-
+                    // affichage de login
+                     fprintf(stderr,"(CLIENT %d) Requete login reçue de %d\n",getpid(),m.expediteur);
                     if (m.data1==1)
                     {
                       w->loginOK();
                       logged=1;
 
-                    }
-                    w->dialogueMessage("LOGIN",m.data4);
+                      
+                      w->dialogueMessage("LOGIN",m.data4);
+                      // dmd de reception du panier
+                      m.type = 1;
+                      m.requete = CONSULT;
+                      m.expediteur = getpid();
+                      m.data1 = 1; //id article dans ce cas , on dmd 1 car premiere reception 
 
+                      if (msgsnd(idQ,&m,sizeof(MESSAGE)-sizeof(long),0) == -1)
+                      {
+                          perror("(Client) Erreur de msgsnd");
+                          msgctl(idQ,IPC_RMID,NULL);
+                          exit(1);
+                      }
+                    }
                     break;
 
         case CONSULT : // TO DO (étape 3)
+                    //initialisation de l'article 
+                    fprintf(stderr,"(CLIENT %d) Requete CONSULT reçue de %d\n",getpid(),m.expediteur);
+                    fprintf(stderr,"(CLIENT %d) Reception de l'article numero %d\n",getpid(),m.data1 );
+                    articleEnCours.id = m.data1;
+                    strcpy(articleEnCours.intitule, m.data2);
+                    articleEnCours.prix = m.data5;
+                    articleEnCours.stock = atoi(m.data3);
+                    strcpy(articleEnCours.image, m.data4);
+                    w->setArticle(articleEnCours.intitule, articleEnCours.prix, articleEnCours.stock, articleEnCours.image);
+
                     break;
 
         case ACHAT : // TO DO (étape 5)

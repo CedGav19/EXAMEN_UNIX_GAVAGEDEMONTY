@@ -10,7 +10,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <signal.h>
+
 #include "protocole.h" // contient la cle et la structure d'un message
 
 int idQ, idShm;
@@ -66,7 +66,7 @@ int main()
 
   while(1)
   {
-   printf("tour de boucle \n");
+   
     // Envoi d'une requete UPDATE_PUB au serveur
   msg.type=1 ;
   msg.expediteur=getpid();

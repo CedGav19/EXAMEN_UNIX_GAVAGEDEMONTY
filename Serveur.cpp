@@ -11,17 +11,20 @@
 #include <signal.h>
 #include <string.h>
 #include <unistd.h>
+#include <setjmp.h>
 #include "protocole.h" // contient la cle et la structure d'un message
 
 #include "FichierClient.h"
-int idQ,idShm,idSem,idfilspub,idfilsbdd;
+int idQ,idShm,idSem,idfilspub,idfilscaddie;
 int fdPipe[2];
 TAB_CONNEXIONS *tab;
+int jmp;
+sigjmp_buf contexte;
 
 void afficheTab();
 
 void handlerSIGINT(int sig);
-
+void handlerSIGCHLD(int sig);
 int main()
 {
   // Armement des signaux
@@ -31,6 +34,11 @@ int main()
   A.sa_handler = handlerSIGINT;
   A.sa_flags = 0;
   sigaction(SIGINT,&A,NULL);
+
+ 
+  A.sa_handler = handlerSIGCHLD;
+  A.sa_flags = 0;
+  sigaction(SIGCHLD,&A,NULL);
 
 
   // Creation des ressources
@@ -90,6 +98,8 @@ int main()
 
   while(1)
   {
+    jmp = sigsetjmp(contexte, 1);
+
   	fprintf(stderr,"(SERVEUR %d) Attente d'une requete...\n",getpid());
     if (msgrcv(idQ,&m,sizeof(MESSAGE)-sizeof(long),1,0) == -1)
     {
@@ -97,7 +107,7 @@ int main()
       msgctl(idQ,IPC_RMID,NULL);
       exit(1);
     }
-
+    else 
     switch(m.requete)
     {
       case CONNECT :  // TO DO
@@ -127,7 +137,7 @@ int main()
                       }                     
                       break;
       case LOGIN :    // TO DO
-
+                      fprintf(stderr,"(SERVEUR %d) Requete LOGIN reçue de %d : --%d--%s--%s--\n",getpid(),m.expediteur,m.data1,m.data2,m.data3);  
 
                       if (m.data1==1)
                         {
@@ -183,6 +193,7 @@ int main()
                           }
 
                         }
+                        // on a verifié le login on envoi donc le msg vers le client 
 
                         m.type=m.expediteur;
                          if(msgsnd(idQ,&m,sizeof(MESSAGE)-sizeof(long),0)==-1)
@@ -193,26 +204,64 @@ int main()
                           }
                           kill(m.type,SIGUSR1);
 
+                          for(int i=0;i<6 && m.data1==1;i++) // connexion etablie 
+                          {
+                            if(tab->connexions[i].pidFenetre == m.expediteur)
+                            {
+                               if((idfilscaddie = fork()) == 0)  
+                            
+                              {
+                                //code executé par le fils (caddie)
+                                if(execlp("Caddie", "Caddie",  NULL) == -1)
+                                {
+                                  perror("Erreur d execution de Caddie\n");
+                                  exit(1);
+                                }
+                              }
+                              //code executé par le pere (serveur)
+                              tab->connexions[i].pidCaddie = idfilscaddie;
+                            }
+                          }
 
 
-                      fprintf(stderr,"(SERVEUR %d) Requete LOGIN reçue de %d : --%d--%s--%s--\n",getpid(),m.expediteur,m.data1,m.data2,m.data3);
+
+                      
                       break; 
 
       case LOGOUT :   // TO DO
-
+                      fprintf(stderr,"(SERVEUR %d) Requete LOGOUT reçue de %d\n",getpid(),m.expediteur);
                       for (int i=0 ; i<6 ; i++)
                       {
                         if(tab->connexions[i].pidFenetre == m.expediteur)
                           {
-                           strcpy(tab->connexions[i].nom,"");
-                            i=6;
+                             strcpy(tab->connexions[i].nom,""); // suppression du client dans le tableau 
+
+                            //suppression du caddie et de son processus 
+                            reponse.type = tab->connexions[i].pidCaddie;
+                            reponse.requete = LOGOUT;
+                            reponse.expediteur=m.expediteur;
+                            if (reponse.type!=0)
+                            {
+                              if (msgsnd(idQ,&reponse,sizeof(MESSAGE)-sizeof(long),0) == -1)
+                              {
+                                  perror("Erreur de msgsnd ");
+                                  msgctl(idQ,IPC_RMID,NULL);
+                                  exit(1);
+                              }
+
+                                i=6;
+                            }
                           }
                       } 
-                      fprintf(stderr,"(SERVEUR %d) Requete LOGOUT reçue de %d\n",getpid(),m.expediteur);
+
+                       
+
+
+                      
                       break;
 
       case UPDATE_PUB :  // TO DO
-                        printf("reception de updatepub");
+                        
                         for (int i = 0 ; i<6; i++)
                         {
                           if (tab->connexions[i].pidFenetre!=0)kill(tab->connexions[i].pidFenetre, SIGUSR2);
@@ -222,6 +271,26 @@ int main()
 
       case CONSULT :  // TO DO
                       fprintf(stderr,"(SERVEUR %d) Requete CONSULT reçue de %d\n",getpid(),m.expediteur);
+                      
+                       // on regarde si le pidfenetre est l'expediteur pour etre sur de pas ecrire n'importe ou 
+                      for (int i = 0; i < 6; i++)
+                        {
+                          if (tab->connexions[i].pidFenetre == m.expediteur)
+                          {
+                            m.type = tab->connexions[i].pidCaddie;
+                            i = 6;
+                          }
+                        }
+                        m.requete=CONSULT;
+
+                        fprintf(stderr,"(SERVEUR %d) Requete CONSULT envoyé a   %d\n",getpid(),m.type);
+                        // on garde le meme expediteur et la meme requete de maniere a ce que le caddie puisse retrouver le pidclient
+                        if (msgsnd(idQ,&m,sizeof(MESSAGE)-sizeof(long),0) == -1) // type = pid du caddie donc lu par le rcv du caddie 
+                        {
+                          perror("(Serveur) Erreur de msgsnd - 3");
+                          msgctl(idQ,IPC_RMID,NULL);
+                          exit(1);
+                        }
                       break;
 
       case ACHAT :    // TO DO
@@ -247,6 +316,9 @@ int main()
       case NEW_PUB :  // TO DO
                       fprintf(stderr,"(SERVEUR %d) Requete NEW_PUB reçue de %d\n",getpid(),m.expediteur);
                       break;
+      case 100 : // pour tester ce queon nous renvoie 
+                fprintf(stderr,"(SERVEUR %d) Requete 100 reçue de %d\n",getpid(),m.expediteur);
+      break;
     }
     afficheTab();
   }
@@ -273,4 +345,22 @@ void handlerSIGINT(int sig)
    msgctl(idQ,IPC_RMID,NULL);
    exit(1);
   
+}
+
+//gestion des fils 
+void handlerSIGCHLD(int sig2)
+{
+  fprintf(stderr,"(SERVEUR %d) reception de sigchld\n",getpid());
+  idfilscaddie = wait(NULL);
+
+  for (int i = 0; i < 6; i++)
+  {
+    if (tab->connexions[i].pidCaddie == idfilscaddie)
+    {
+      tab->connexions[i].pidCaddie = 0;
+      strcpy(tab->connexions[i].nom, "\0");
+      i = 6;
+    }
+  }
+   siglongjmp(contexte, 406);
 }
