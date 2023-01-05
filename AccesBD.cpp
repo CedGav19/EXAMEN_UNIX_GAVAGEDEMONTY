@@ -85,7 +85,7 @@ int main(int argc,char* argv[])
                         strcpy(reponse.data2, Tuple[1]);
                          strcpy(reponse.data3, Tuple[3]);
                         strcpy(reponse.data4, Tuple[4]);
-                        reponse.data5 = atof(Tuple[5]);
+                        reponse.data5 = atof(Tuple[2]);
                         // Envoi de la reponse au bon caddie grace a exped qui contenait le pid 
                         // caddie qui recevra et renverra a son client
                       }
