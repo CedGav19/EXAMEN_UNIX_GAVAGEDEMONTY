@@ -66,7 +66,7 @@ int main()
 
   while(1)
   {
-   
+    
     // Envoi d'une requete UPDATE_PUB au serveur
   msg.type=1 ;
   msg.expediteur=getpid();
@@ -78,7 +78,7 @@ int main()
         msgctl(idQ,IPC_RMID,NULL);
         exit(1);
       }
-        
+         
     sleep(1); 
 
     tmpchar =pShm[0];

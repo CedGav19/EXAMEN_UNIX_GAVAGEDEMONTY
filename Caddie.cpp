@@ -27,7 +27,7 @@ int fdWpipe;
 int pidClient;
 int stock ;
 
-MYSQL* connexion;
+//MYSQL* connexion;
 
 void handlerSIGALRM(int sig);
 
@@ -49,12 +49,12 @@ int main(int argc,char* argv[])
     exit(1);
   }
   // Connexion à la base de donnée
-  connexion = mysql_init(NULL);
-  if (mysql_real_connect(connexion,"localhost","Student","PassStudent1_","PourStudent",0,0,0) == NULL)
+  /* connexion = mysql_init(NULL);
+ if (mysql_real_connect(connexion,"localhost","Student","PassStudent1_","PourStudent",0,0,0) == NULL)
   {
     fprintf(stderr,"(SERVEUR) Erreur de connexion à la base de données...\n");
     exit(1);  
-  }
+  }*/ // plus utilse car mtn c'est acces qui fais la connexcion 
 
   MESSAGE m;
   MESSAGE reponse;
@@ -65,7 +65,7 @@ int main(int argc,char* argv[])
   MYSQL_ROW  Tuple;
 
   // Récupération descripteur écriture du pipe
-  //fdWpipe = atoi(argv[1]);
+  fdWpipe = atoi(argv[1]);
   
   while(1)
   {
@@ -79,6 +79,7 @@ int main(int argc,char* argv[])
     {
       case LOGIN :    // TO DO
                       fprintf(stderr,"(CADDIE %d) Requete LOGIN reçue de %d\n",getpid(),m.expediteur);
+                      pidClient = m.expediteur;
                       break;
 
       case LOGOUT :   // TO DO
@@ -87,59 +88,33 @@ int main(int argc,char* argv[])
                       break;
 
       case CONSULT :  // TO DO
-                      fprintf(stderr,"(CADDIE %d) Requete CONSULT reçue de %d\n",getpid(),m.expediteur);
-                      pidClient = m.expediteur;
-                       
-                        // acces a sql semblable a php de 1ere
-                      sprintf(requete,"select * from UNIX_FINAL where id = %d", m.data1);
-                      if (mysql_query(connexion, requete) != 0)
-                      {
-                        fprintf (stderr, "Erreur de Mysql-query");
-                      }
+                    fprintf(stderr,"(CADDIE %d) Requete CONSULT recue de %d\n",getpid(),m.expediteur);
+                    
+                    if (m.expediteur == 1)
+                    {
+                        // On va pipe le message vers Access
+                        m.expediteur = getpid();
+                      fprintf(stderr,"(CADDIE %d) Requete CONSULT envoyé a accesBD par pipe\n ",getpid());
+                      write(fdWpipe, &m, sizeof(MESSAGE));
 
-                      if((resultat = mysql_store_result(connexion)) == NULL)
-                      {
-                        fprintf (stderr,"Erreur de mysql store");
-                      }
-
-                      if ((Tuple = mysql_fetch_row(resultat)) != NULL)
-                      {
-                        
-                        reponse.requete=CONSULT ;
-                        reponse.type = pidClient;
-                        
-
-                        reponse.expediteur = getpid();
-                        
-                        reponse.data1 = atoi(Tuple[0]);
-                        strcpy(reponse.data2, Tuple[1]);
-                        strcpy(reponse.data4, Tuple[4]);
-                        strcpy(reponse.data3, Tuple[3]);
-                        reponse.data5= atof(Tuple[2]);
-
-                        /*char Prix[20];
-                        strcpy(Prix, Tuple[2]);
-                        String tmp4(Prix);
-                        size_t x = tmp4.find(",");
-                        if (x != String::npos) tmp4.replace(x,1,".");
-                        
-                        reponse.data5 = atof(tmp4.c_str());*/
-
-
-
-                      fprintf(stderr,"(CADDIE %d) Requete CONSULT envoyé a %d\n",getpid(),reponse.type);
-                        if ((stock = atoi(reponse.data3)) > 0);
+                    }
+                    else 
+                    {
+                        if ( m.data1!=-1 &&(stock = atoi(m.data3)) > 0)
+                        {
+                          m.expediteur = getpid();
+                          m.type = pidClient;
+                          fprintf(stderr,"(CADDIE %d) Requete CONSULT avec article n %d  envoyé a %d\n",getpid(),m.data1,m.type);
+                          if(msgsnd(idQ,&m,sizeof(MESSAGE)-sizeof(long),0) == -1)
                           {
-                            if(msgsnd(idQ,&reponse,sizeof(MESSAGE)-sizeof(long),0) == -1)
-                            {
-                              perror("(Caddie) Erreur de msgsnd");
-                              msgctl(idQ,IPC_RMID,NULL);
-                              exit(1);
-                            }
-                            kill(pidClient, SIGUSR1);
+                            perror("(Caddie) Erreur de msgsnd");
+                            msgctl(idQ,IPC_RMID,NULL);
+                            exit(1);
                           }
-                      }
-                      break;
+                          kill(pidClient, SIGUSR1);
+                        }
+                    }
+                  break;
 
       case ACHAT :    // TO DO
                       fprintf(stderr,"(CADDIE %d) Requete ACHAT reçue de %d\n",getpid(),m.expediteur);

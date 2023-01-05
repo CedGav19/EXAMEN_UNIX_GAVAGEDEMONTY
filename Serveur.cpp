@@ -15,7 +15,7 @@
 #include "protocole.h" // contient la cle et la structure d'un message
 
 #include "FichierClient.h"
-int idQ,idShm,idSem,idfilspub,idfilscaddie;
+int idQ,idShm,idSem,idfilspub,idfilscaddie,idfilsaccesBD;
 int fdPipe[2];
 TAB_CONNEXIONS *tab;
 int jmp;
@@ -62,6 +62,11 @@ int main()
 
   // Creation du pipe
   // TO DO
+  if (pipe(fdPipe) == -1)
+  {
+    fprintf (stderr, "Erreur de pipe !");
+    exit(1);
+  }
 
   // Initialisation du tableau de connexions
   tab = (TAB_CONNEXIONS*) malloc(sizeof(TAB_CONNEXIONS)); 
@@ -89,9 +94,26 @@ int main()
     }
 
   }
-
+  
   // Creation du processus AccesBD (étape 4)
-  // TO DO
+
+   if((idfilsaccesBD = fork()) == -1)
+  {
+    perror("Erreur de fork pour acces bd ");
+    exit(1);
+  }
+  char tamponchar[15];
+  if(idfilsaccesBD == 0)
+  {
+    sprintf(tamponchar, "%d", fdPipe[0]); // j'ai essaye itoa mais pas sous linux de ce que j'ai vu en ligne !
+    if(execl("AccesBD", "AccesBD", tamponchar, NULL) == -1)
+    {
+      perror("Erreur execl de Acces Bd\n");
+      exit(1);
+    }
+  }
+  tab->pidAccesBD = idfilsaccesBD;
+  tab->pidPublicite=idfilspub;
 
   MESSAGE m;
   MESSAGE reponse;
@@ -212,14 +234,26 @@ int main()
                             
                               {
                                 //code executé par le fils (caddie)
-                                if(execlp("Caddie", "Caddie",  NULL) == -1)
+                                sprintf (tamponchar, "%d", fdPipe[1]);
+                                if(execlp("Caddie", "Caddie",tamponchar,  NULL) == -1)
                                 {
                                   perror("Erreur d execution de Caddie\n");
                                   exit(1);
                                 }
                               }
-                              //code executé par le pere (serveur)
+                              //code executé par le pere (serveur) -> preveitn le caddie avec une requete logina  quel client il est connecte 
                               tab->connexions[i].pidCaddie = idfilscaddie;
+
+                              m.type = tab->connexions[i].pidCaddie;
+                              if (msgsnd(idQ,&m,sizeof(MESSAGE)-sizeof(long),0) == -1)
+                              {
+                                  fprintf (stderr, "Erreur de msgsnd - 6");
+                                  msgctl(idQ,IPC_RMID,NULL);
+                                  exit(1);
+                              }
+
+
+
                             }
                           }
 
@@ -282,6 +316,7 @@ int main()
                           }
                         }
                         m.requete=CONSULT;
+                        m.expediteur= 1 ; // plus besoin de laisser le pid du client car mltn chaque caddie connait son client depuis le login
 
                         fprintf(stderr,"(SERVEUR %d) Requete CONSULT envoyé a   %d\n",getpid(),m.type);
                         // on garde le meme expediteur et la meme requete de maniere a ce que le caddie puisse retrouver le pidclient
@@ -342,7 +377,20 @@ void handlerSIGINT(int sig)
 {
   kill(idfilspub,SIGINT);
   shmctl(idShm,IPC_RMID,NULL);
-   msgctl(idQ,IPC_RMID,NULL);
+  msgctl(idQ,IPC_RMID,NULL);
+
+  if (close(fdPipe[1]) == -1)
+  {
+    printf("Erreur de fermeture en de pipe d'ecriture\n");
+  }
+
+  if (close(fdPipe[0]) == -1)
+  {
+    printf("Erreur de fermeture en de pipe de lecture\n");
+  }
+
+
+
    exit(1);
   
 }
