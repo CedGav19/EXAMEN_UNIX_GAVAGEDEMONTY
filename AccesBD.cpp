@@ -18,7 +18,10 @@ int idQ;
 MYSQL_RES  *resultat;
 MYSQL_ROW  Tuple;
 MYSQL* connexion;
- char requete[200];
+int qtedispo =0;
+int qtedemandee=0;
+int newqte ;
+ char requete[150];
 
 
 int main(int argc,char* argv[])
@@ -63,6 +66,8 @@ int main(int argc,char* argv[])
                       fprintf(stderr,"(ACCESBD %d) Requete CONSULT reçue de %d\n",getpid(),m.expediteur);
                       // Acces BD
 
+
+                      // comme en php 
                       sprintf(requete,"select * from UNIX_FINAL where id = %d", m.data1);
 
                       if (mysql_query(connexion, requete) != 0)
@@ -105,8 +110,57 @@ int main(int argc,char* argv[])
 
       case ACHAT :    // TO DO
                       fprintf(stderr,"(ACCESBD %d) Requete ACHAT reçue de %d\n",getpid(),m.expediteur);
-                      // Acces BD
 
+                      // Acces BD , comme ne php l'annee passee 
+                      sprintf(requete,"select * from UNIX_FINAL where id = %d", m.data1);
+                      if (mysql_query(connexion, requete) != 0)
+                      {
+                        fprintf (stderr, "Erreur de Mysql-query");
+                      }
+                      if((resultat = mysql_store_result(connexion)) == NULL)
+                      {
+                        fprintf (stderr, "Erreur de mysql store");
+                      }
+                      if ((Tuple = mysql_fetch_row(resultat)) != NULL)
+                      {
+                            
+                        qtedispo = atoi(Tuple[3]);
+                        qtedemandee = atoi(m.data2);//conversion pour pouvoir faire les calcus 
+                        reponse.type = m.expediteur; 
+                        reponse.expediteur = getpid();
+                        reponse.requete = ACHAT;
+                        reponse.data1 = atoi(Tuple[0]);
+                        strcpy(reponse.data2, Tuple[1]);
+                        strcpy(reponse.data4, Tuple[4]);
+
+                        if (qtedemandee > qtedispo)
+                        {
+                         sprintf(m.data3,"0"); // condition donne par le prof , on renvoi 0 quand pas possible 
+                        }
+                        else
+                        {
+                          //maj
+                          newqte = qtedispo - qtedemandee;
+
+                          sprintf(reponse.data3,  m.data2);//qte
+                          sprintf(requete,"UPDATE UNIX_FINAL SET stock = %d where id = %d", newqte, reponse.data1);
+                          if (mysql_query(connexion, requete) != 0) //requete de mise a jour
+                          {
+                            fprintf (stderr, "Erreur de Mysql-query");
+                          }
+
+                        }
+
+
+                        // Finalisation et envoi de la reponse
+                        if(msgsnd(idQ,&reponse,sizeof(MESSAGE)-sizeof(long),0) == -1)
+                        {
+                          perror("(AccesBD) Erreur de msgsnd");
+                          msgctl(idQ,IPC_RMID,NULL);
+                          exit(1);
+                        }
+
+                      }
                       // Finalisation et envoi de la reponse
                       break;
 

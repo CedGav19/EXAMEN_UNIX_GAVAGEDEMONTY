@@ -20,8 +20,9 @@
 
 int idQ;
 
-ARTICLE articles[10];
+ARTICLE articles[10]; //pour la gestion du caddie 
 int nbArticles = 0;
+
 
 int fdWpipe;
 int pidClient;
@@ -118,17 +119,79 @@ int main(int argc,char* argv[])
 
       case ACHAT :    // TO DO
                       fprintf(stderr,"(CADDIE %d) Requete ACHAT reçue de %d\n",getpid(),m.expediteur);
+                      if (m.expediteur == 1)
+                      {
 
-                      // on transfert la requete à AccesBD
-                      
-                      // on attend la réponse venant de AccesBD
-                        
-                      // Envoi de la reponse au client
+                        m.expediteur = getpid();
+                        write(fdWpipe, &m, sizeof(MESSAGE));
+
+                      }
+                      else
+                      {
+
+                        m.type = pidClient;
+                        m.expediteur = getpid();
+                        m.requete = ACHAT;
+
+
+
+                          if (atoi(m.data3) != 0 )
+                          {
+
+                              articles[nbArticles].id = m.data1;
+                              strcpy(articles[nbArticles].intitule, m.data2);
+                              articles[nbArticles].prix = m.data5;
+                              articles[nbArticles].stock = atoi(m.data3);
+                              strcpy(articles[nbArticles].image, m.data4);
+  
+                              nbArticles ++;
+
+                              if(msgsnd(idQ,&m,sizeof(MESSAGE)-sizeof(long),0) == -1)
+                              {
+                                perror("(Caddie) Erreur de msgsnd");
+                                msgctl(idQ,IPC_RMID,NULL);
+                                exit(1);
+                              }
+
+                          }
+                          else  // L'achat ne s'est pas effectué
+                          {
+                              if(msgsnd(idQ,&m,sizeof(MESSAGE)-sizeof(long),0) == -1)
+                              {
+                                perror("(Caddie) Erreur de msgsnd");
+                                msgctl(idQ,IPC_RMID,NULL);
+                                exit(1);
+                              }
+                          }
+                          kill(pidClient, SIGUSR1);
+                        }
 
                       break;
 
       case CADDIE :   // TO DO
                       fprintf(stderr,"(CADDIE %d) Requete CADDIE reçue de %d\n",getpid(),m.expediteur);
+                      for ( int i=0 ;i<nbArticles;i++)
+                      {
+                        reponse.type = pidClient;
+                        reponse.expediteur = getpid();
+                        reponse.requete = CADDIE;
+                        reponse.data1 = articles[i].id;
+                        strcpy(reponse.data2,articles[i].intitule);
+                        reponse.data5 = articles[i].prix;
+                        sprintf (reponse.data3, "%d", articles[i].stock);
+                        strcpy(reponse.data4, articles[i].image);
+
+                          if(msgsnd(idQ,&reponse,sizeof(MESSAGE)-sizeof(long),0) == -1)
+                          {
+                            perror("(Caddie) Erreur de msgsnd");
+                            msgctl(idQ,IPC_RMID,NULL);
+                            exit(1);
+                          }
+                          kill(pidClient, SIGUSR1);
+
+                      };
+                     
+                     
                       break;
 
       case CANCEL :   // TO DO

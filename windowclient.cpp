@@ -468,6 +468,26 @@ void WindowClient::on_pushButtonAcheter_clicked()
 {
     // TO DO (étape 5)
     // Envoi d'une requete ACHAT au serveur
+   MESSAGE  msg ;
+  if (getQuantite() > 0)
+  {
+    msg.data1 = articleEnCours.id;      
+    msg.requete = ACHAT;
+    msg.type = 1;
+    msg.expediteur = getpid();
+    sprintf(msg.data2, "%d", getQuantite());
+
+    if (msgsnd(idQ,&msg,sizeof(MESSAGE)-sizeof(long),0) == -1)
+    {
+        perror("(Client) Erreur de msgsnd (achat) ");
+        msgctl(idQ,IPC_RMID,NULL);
+        exit(1);
+    }
+  }
+  else
+  {
+      w->dialogueMessage("Achat", "Veuillez entrer une valeur plus garnde que 0 , car on veut acheter ici pas vendre ou ne rien faire ... ");
+  }
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -522,8 +542,10 @@ void WindowClient::on_pushButtonPayer_clicked()
 void handlerSIGUSR1(int sig)
 {
     MESSAGE m;
+    char affiche [50];
+      float tmpqte=0;
     
-    if (msgrcv(idQ,&m,sizeof(MESSAGE)-sizeof(long),getpid(),IPC_NOWAIT) != -1)  // !!! a modifier en temps voulu !!!
+    while (msgrcv(idQ,&m,sizeof(MESSAGE)-sizeof(long),getpid(),IPC_NOWAIT) != -1)  // !!! a modifier en temps voulu !!!
     {fprintf(stderr,"(CLIENT %d) Reception d'une requete  de %d\n",getpid(),m.expediteur  );
       switch(m.requete)
       {
@@ -566,9 +588,39 @@ void handlerSIGUSR1(int sig)
                     break;
 
         case ACHAT : // TO DO (étape 5)
+                    if (atoi(m.data3) == 0)
+                    {
+                        w->dialogueMessage("Achat", "Stock insuffisant !");
+                    }
+                    else
+                    {
+                      sprintf(affiche,"%s unités de %s achetees",m.data3, m.data2);
+                      w->dialogueMessage("Achat", affiche);
+
+                      //envoie de caddie pour recevoir tte les infos du caddie 
+                      m.type = 1;
+                      m.requete = CADDIE;
+                      m.expediteur = getpid();
+
+                      if (msgsnd(idQ,&m,sizeof(MESSAGE)-sizeof(long),0) == -1)
+                      {
+                          perror("(Client) Erreur de msgsnd");
+                          msgctl(idQ,IPC_RMID,NULL);
+                          exit(1);
+                      }
+                          // On vide le panir pour qu'il puisse être mis à jour.
+                      w->videTablePanier();
+                      totalCaddie = 0; //tot a payer 
+                    
+                    }
                     break;
 
          case CADDIE : // TO DO (étape 5)
+                    fprintf(stderr,"(CLIENT %d) Requete CADDIE reçue de %d\n",getpid(),m.expediteur);
+                      w->ajouteArticleTablePanier(m.data2,m.data5,atoi(m.data3));
+                     tmpqte =atof(m.data3);
+                      totalCaddie = totalCaddie+  tmpqte*m.data5; 
+                      w->setTotal(totalCaddie);
                     break;
 
          case TIME_OUT : // TO DO (étape 6)

@@ -330,10 +330,43 @@ int main()
 
       case ACHAT :    // TO DO
                       fprintf(stderr,"(SERVEUR %d) Requete ACHAT reçue de %d\n",getpid(),m.expediteur);
+
+                        for (int i = 0; i < 6; i++)
+                        {
+                          if (tab->connexions[i].pidFenetre == m.expediteur) 
+                          {
+                            m.type = tab->connexions[i].pidCaddie;
+                            i = 6;
+                          }
+                        }
+                        m.expediteur = 1;
+                        if (msgsnd(idQ,&m,sizeof(MESSAGE)-sizeof(long),0) == -1) // envoie au caddie 
+                        {
+                          perror("(Serveur) Erreur de msgsnd - 4");
+                          msgctl(idQ,IPC_RMID,NULL);
+                          exit(1);
+                        }
+
                       break;
 
       case CADDIE :   // TO DO
                       fprintf(stderr,"(SERVEUR %d) Requete CADDIE reçue de %d\n",getpid(),m.expediteur);
+
+                       for (int i = 0; i < 6; i++)
+                        {
+                          if (tab->connexions[i].pidFenetre == m.expediteur) 
+                          {
+                            m.type = tab->connexions[i].pidCaddie;
+                            i = 6;
+                          }
+                        }
+                        m.expediteur = 1;
+                        if (msgsnd(idQ,&m,sizeof(MESSAGE)-sizeof(long),0) == -1) // envoie au caddie 
+                        {
+                          perror("(Serveur) Erreur de msgsnd - 4");
+                          msgctl(idQ,IPC_RMID,NULL);
+                          exit(1);
+                        }
                       break;
 
       case CANCEL :   // TO DO
@@ -351,8 +384,8 @@ int main()
       case NEW_PUB :  // TO DO
                       fprintf(stderr,"(SERVEUR %d) Requete NEW_PUB reçue de %d\n",getpid(),m.expediteur);
                       break;
-      case 100 : // pour tester ce queon nous renvoie 
-                fprintf(stderr,"(SERVEUR %d) Requete 100 reçue de %d\n",getpid(),m.expediteur);
+      /*case 100 : 
+                fprintf(stderr,"(SERVEUR %d) Requete 100 reçue de %d\n",getpid(),m.expediteur);*/
       break;
     }
     afficheTab();
