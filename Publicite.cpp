@@ -55,6 +55,9 @@ int main()
   // Attachement à la mémoire partagée
   pShm = (char*)shmat(idShm,NULL,0); // 0pour lecture et ecriture , NULL car on choisit pas soi meme une adresse! 
 
+
+
+
   // Mise en place de la publicité en mémoire partagée
   char pub[51];
   strcpy(pub,"Bienvenue sur le site du Maraicher en ligne !");
@@ -68,14 +71,14 @@ int main()
   {
     
     // Envoi d'une requete UPDATE_PUB au serveur
-  msg.type=1 ;
-  msg.expediteur=getpid();
-  msg.requete=UPDATE_PUB;
+    msg.type=1 ;
+    msg.expediteur=getpid();
+    msg.requete=UPDATE_PUB;
 
   if(msgsnd(idQ,&msg,sizeof(MESSAGE)-sizeof(long),0)==-1)
       {
-        perror("erreur d'envoi");
-        msgctl(idQ,IPC_RMID,NULL);
+      //  perror("(PUB)erreur d'envoi sur la file de msg \n");
+      // msgctl(idQ,IPC_RMID,NULL);
         exit(1);
       }
          
@@ -95,8 +98,19 @@ int main()
 void handlerSIGUSR1(int sig)
 {
   fprintf(stderr,"(PUBLICITE %d) Nouvelle publicite !\n",getpid());
+  MESSAGE m ;
+   char pub[51];
+  if (msgrcv(idQ,&m,sizeof(MESSAGE)-sizeof(long),0,0) == -1)
+  {
+    perror("(PUB) Erreur de msgrcv - 4");
+    msgctl(idQ,IPC_RMID,NULL);
+    exit(1);
+   }
 
-  // Lecture message NEW_PUB
-
-  // Mise en place de la publicité en mémoire partagée
+   strcpy(pub,m.data4);
+  for (int i=0 ; i<=50 ; i++) pShm[i] = ' ';
+  pShm[51] = '\0';
+  int indDebut = 25 - strlen(pub)/2;
+  for (int i=0 ; i<strlen(pub) ; i++) pShm[indDebut + i] = pub[i];
+  
 }

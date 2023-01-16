@@ -99,10 +99,6 @@ WindowClient::WindowClient(QWidget *parent) : QMainWindow(parent), ui(new Ui::Wi
         exit(1);
       }
 
-    // Exemples à supprimer
-    
-    //setArticle("pommes",5.53,18,"pommes.jpg");
-    ajouteArticleTablePanier("cerises",8.96,2);
 }
 
 WindowClient::~WindowClient()
@@ -338,11 +334,21 @@ void WindowClient::closeEvent(QCloseEvent *event)
 {
   // TO DO (étape 1)
   MESSAGE  msg ; 
+
+  if (logged==1)
+  {
+    msg.type = 1;
+    msg.requete = CANCEL_ALL;
+    msg.expediteur = getpid();
+    if (msgsnd(idQ,&msg,sizeof(MESSAGE)-sizeof(long),0) == -1)
+    {
+        perror(" Erreur de msgsnd ");
+        msgctl(idQ,IPC_RMID,NULL);
+        exit(1);
+    }
+  }
   msg.type=1 ;
   msg.expediteur=getpid();
-
-  // Envoi d'une requete DECONNECT au serveur
-    
 
   // envoi d'un logout si logged
   if (logged==1)
@@ -359,7 +365,6 @@ void WindowClient::closeEvent(QCloseEvent *event)
 
   }
   // Envoi d'une requete de deconnexion au serveur
-     
       msg.requete= DECONNECT ;
 
       if(msgsnd(idQ,&msg,sizeof(MESSAGE)-sizeof(long),0)==-1)
@@ -378,8 +383,7 @@ void WindowClient::closeEvent(QCloseEvent *event)
 void WindowClient::on_pushButtonLogin_clicked()
 {
     // Envoi d'une requete de login au serveur
-      MESSAGE  msg ; 
-  
+      MESSAGE msg;
       msg.type=1 ;
       msg.expediteur=getpid();
       msg.requete= LOGIN ;
@@ -395,7 +399,7 @@ void WindowClient::on_pushButtonLogin_clicked()
         exit(1);
       }
 
-    // TO DO
+   
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -403,12 +407,21 @@ void WindowClient::on_pushButtonLogout_clicked()
 {
     // Envoi d'une requete CANCEL_ALL au serveur (au cas où le panier n'est pas vide)
     // TO DO
+      MESSAGE  msg ; 
+    
+      msg.type = 1;
+      msg.requete = CANCEL_ALL;
+      msg.expediteur = getpid();
 
+      if (msgsnd(idQ,&msg,sizeof(MESSAGE)-sizeof(long),0) == -1)
+      {
+          perror("(Client) Erreur de msgsnd - Suppression article");
+          msgctl(idQ,IPC_RMID,NULL);
+          exit(1);
+      }
     // Envoi d'une requete de logout au serveur
     // TO DO
 
-       MESSAGE  msg ; 
-  
       msg.type=1 ;
       msg.expediteur=getpid();
       msg.requete= LOGOUT ;
@@ -420,6 +433,10 @@ void WindowClient::on_pushButtonLogout_clicked()
         msgctl(idQ,IPC_RMID,NULL);
         exit(1);
       }
+
+
+     
+      logged=0;
       logoutOK();
 }
 
@@ -495,27 +512,75 @@ void WindowClient::on_pushButtonSupprimer_clicked()
 {
     // TO DO (étape 6)
     // Envoi d'une requete CANCEL au serveur
-
+  MESSAGE msg;
     // Mise à jour du caddie
-    w->videTablePanier();
-    totalCaddie = 0.0;
-    w->setTotal(-1.0);
+   if ((msg.data1=getIndiceArticleSelectionne() )== -1 )
+    {
+        w->dialogueMessage("Erreur :", "Aucun article séléctionné !");
+    }
+    else
+    {
+      msg.type = 1;
+      msg.requete = CANCEL;
+      msg.expediteur = getpid();
 
-    // Envoi requete CADDIE au serveur
+      if (msgsnd(idQ,&msg,sizeof(MESSAGE)-sizeof(long),0) == -1)
+      {
+          perror("(Client) Erreur de msgsnd - Suppression article");
+          msgctl(idQ,IPC_RMID,NULL);
+          exit(1);
+      }
+
+
+      // maj caddie
+     
+      w->videTablePanier();
+      totalCaddie = 0.0;
+      w->setTotal(0.0);
+      msg.type = 1;
+      msg.requete = CADDIE;
+      msg.expediteur = getpid();
+
+      if (msgsnd(idQ,&msg,sizeof(MESSAGE)-sizeof(long),0) == -1)
+      {
+      perror("(Client) Erreur de msgsnd");
+      msgctl(idQ,IPC_RMID,NULL);
+      exit(1);
+      }
+
+    }
 }
-
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void WindowClient::on_pushButtonViderPanier_clicked()
 {
-    // TO DO (étape 6)
-    // Envoi d'une requete CANCEL_ALL au serveur
+  // TO DO (étape 6)
+  MESSAGE msg ;
+  // Envoi d'une requete CANCEL_ALL au serveur
+  msg.type = 1;
+  msg.requete = CANCEL_ALL;
+  msg.expediteur = getpid();
 
-    // Mise à jour du caddie
+  if (msgsnd(idQ,&msg,sizeof(MESSAGE)-sizeof(long),0) == -1)
+  {
+      perror("(Client) Erreur de msgsnd - Suppression article");
+      msgctl(idQ,IPC_RMID,NULL);
+      exit(1);
+  }
+
+    // Maj caddie
     w->videTablePanier();
     totalCaddie = 0.0;
     w->setTotal(-1.0);
+    msg.type = 1;
+    msg.requete = CADDIE;
+    msg.expediteur = getpid();
 
-    // Envoi requete CADDIE au serveur
+    if (msgsnd(idQ,&msg,sizeof(MESSAGE)-sizeof(long),0) == -1)
+    {
+    perror("(Client) Erreur de msgsnd");
+    msgctl(idQ,IPC_RMID,NULL);
+    exit(1);
+    }
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -523,7 +588,18 @@ void WindowClient::on_pushButtonPayer_clicked()
 {
     // TO DO (étape 7)
     // Envoi d'une requete PAYER au serveur
+  MESSAGE msg ;
+    msg.type = 1;
+    msg.requete = PAYER;
+    msg.expediteur = getpid();
+    msg.data1 = getIndiceArticleSelectionne();
 
+    if (msgsnd(idQ,&msg,sizeof(MESSAGE)-sizeof(long),0) == -1)
+    {
+        perror("(Client) Erreur de msgsnd - Suppression article");
+        msgctl(idQ,IPC_RMID,NULL);
+        exit(1);
+    }
     char tmp[100];
     sprintf(tmp,"Merci pour votre paiement de %.2f ! Votre commande sera livrée tout prochainement.",totalCaddie);
     dialogueMessage("Payer...",tmp);
@@ -588,7 +664,7 @@ void handlerSIGUSR1(int sig)
                     break;
 
         case ACHAT : // TO DO (étape 5)
-                    if (atoi(m.data3) == 0)
+                    if (strcmp(m.data3,"0") == 0)
                     {
                         w->dialogueMessage("Achat", "Stock insuffisant !");
                     }
@@ -624,9 +700,13 @@ void handlerSIGUSR1(int sig)
                     break;
 
          case TIME_OUT : // TO DO (étape 6)
+                      fprintf(stderr,"(CLIENT %d) Requete TIME_OUT reçue de %d\n",getpid(),m.expediteur);
+                        w->logoutOK();
+                        w->dialogueErreur("TIME-OUT", "Déconecte pour cause d'inactivité");                
                     break;
 
          case BUSY : // TO DO (étape 7)
+                     w->dialogueErreur("MAINTENANCE", "SERVEUR en maintenance veuillez réessayer ulterieurement ! "); 
                     break;
 
          default :
@@ -640,7 +720,5 @@ void handlerSIGUSR1(int sig)
 void handlerSIGUSR2(int sig)
 {
   w->setPublicite(pShm);
-
-
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////

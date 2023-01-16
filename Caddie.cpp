@@ -10,13 +10,9 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <signal.h>
 #include <mysql.h>
-#include <string>
-#include <cstring>
-#include <strings.h>
+#include "protocole.h"
 
-#include "protocole.h" // contient la cle et la structure d'un message
 
 int idQ;
 
@@ -36,11 +32,16 @@ int main(int argc,char* argv[])
 {
   // Masquage de SIGINT
   sigset_t mask;
+  sigemptyset(&mask);
   sigaddset(&mask,SIGINT);
   sigprocmask(SIG_SETMASK,&mask,NULL);
 
   // Armement des signaux
   // TO DO
+  struct sigaction A;
+  A.sa_handler = handlerSIGALRM;
+  A.sa_flags = 0;
+   sigaction(SIGALRM, &A, NULL) ;
 
   // Recuperation de l'identifiant de la file de messages
   fprintf(stderr,"(CADDIE %d) Recuperation de l'id de la file de messages\n",getpid());
@@ -64,17 +65,22 @@ int main(int argc,char* argv[])
   char newUser[20];
   MYSQL_RES  *resultat;
   MYSQL_ROW  Tuple;
+  int tmpalrm ;
 
   // Récupération descripteur écriture du pipe
   fdWpipe = atoi(argv[1]);
   
   while(1)
   {
+     alarm(60);
+      //fprintf(stderr,"------+++--(CADDIE %d) lancement de alarm\n",getpid());
     if (msgrcv(idQ,&m,sizeof(MESSAGE)-sizeof(long),getpid(),0) == -1)
     {
       perror("(CADDIE) Erreur de msgrcv");
       exit(1);
     }
+      tmpalrm = alarm(0);
+      //fprintf(stderr,"------+++--(CADDIE %d) reset de alarm il restait %d  sec  \n",getpid(),tmpalrm);
 
     switch(m.requete)
     {
@@ -135,7 +141,7 @@ int main(int argc,char* argv[])
 
 
 
-                          if (atoi(m.data3) != 0 )
+                          if (strcmp(m.data3,"0") != 0 )
                           {
 
                               articles[nbArticles].id = m.data1;
@@ -195,25 +201,48 @@ int main(int argc,char* argv[])
                       break;
 
       case CANCEL :   // TO DO
-                      fprintf(stderr,"(CADDIE %d) Requete CANCEL reçue de %d\n",getpid(),m.expediteur);
+                      fprintf(stderr,"(CADDIE %d) Requete CANCEL reçue de %d  , pour l'article numero %d qui est %s  et qui se trouve %d fois en stock\n",getpid(),m.expediteur,m.data1,articles[m.data1].intitule,articles[m.data1].stock);
 
-                      // on transmet la requete à AccesBD
+                      reponse .expediteur = getpid();
+                      reponse.requete = CANCEL;
+                      sprintf (reponse.data2, "%d", articles[m.data1].stock); 
+                      reponse.data1 = articles[m.data1].id;
+                      write(fdWpipe, &reponse, sizeof(MESSAGE));
+
 
                       // Suppression de l'aricle du panier
+                      for (m.data1; m.data1 < nbArticles; m.data1++) //m=msgrecu
+                      {
+                        articles[m.data1].id = articles[(m.data1 + 1)].id;
+                        strcpy(articles[m.data1].intitule ,articles[(m.data1 + 1)].intitule);
+                        articles[m.data1].prix = articles[(m.data1 + 1)].prix;
+                        articles[m.data1].stock = articles[(m.data1 + 1)].stock;
+                        strcpy(articles[m.data1].image ,articles[(m.data1 + 1)].image); // voir structure de articles 
+                      }
+                      nbArticles--;
+                      
                       break;
 
       case CANCEL_ALL : // TO DO
                       fprintf(stderr,"(CADDIE %d) Requete CANCEL_ALL reçue de %d\n",getpid(),m.expediteur);
 
-                      // On envoie a AccesBD autant de requeres CANCEL qu'il y a d'articles dans le panier
+                        for (int i = 0; i < nbArticles; i++)
+                        {
+                          reponse.expediteur = getpid();
+                          reponse.data1 = articles[i].id;
+                          reponse.requete = CANCEL;
+                          sprintf (reponse.data2, "%d", articles[i].stock); 
 
-                      // On vide le panier
+                          write(fdWpipe, &reponse, sizeof(MESSAGE));
+                        }
+                        nbArticles = 0;
                       break;
 
       case PAYER :    // TO DO
                       fprintf(stderr,"(CADDIE %d) Requete PAYER reçue de %d\n",getpid(),m.expediteur);
 
                       // On vide le panier
+                       nbArticles = 0; // on reecrira sur les artciles enft , j'avais pense a tt supprime mais bco bcp de probleme et j'avais plus trop de temps...
                       break;
     }
   }
@@ -222,11 +251,31 @@ int main(int argc,char* argv[])
 void handlerSIGALRM(int sig)
 {
   fprintf(stderr,"(CADDIE %d) Time Out !!!\n",getpid());
-
+  MESSAGE msg ;
   // Annulation du caddie et mise à jour de la BD
-  // On envoie a AccesBD autant de requetes CANCEL qu'il y a d'articles dans le panier
+  for (int i = 0; i < nbArticles; i++)
+  {
+    msg.expediteur = getpid();
+    msg.data1 = articles[i].id;
+    msg.requete = CANCEL;
+    sprintf (msg.data2, "%d", articles[i].stock); 
+
+    write(fdWpipe, &msg, sizeof(MESSAGE));
+  }
 
   // Envoi d'un Time Out au client (s'il existe toujours)
+
+    msg.type = pidClient;
+    msg.expediteur = getpid();
+    msg.requete = TIME_OUT;
+    if(msgsnd(idQ,&msg,sizeof(MESSAGE)-sizeof(long),0) == -1)
+    {
+    perror("(Caddie) Erreur de msgsnd");
+    msgctl(idQ,IPC_RMID,NULL);
+    exit(1);
+    }
+
+    kill (pidClient, SIGUSR1); 
          
   exit(0);
 }

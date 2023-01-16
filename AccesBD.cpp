@@ -53,6 +53,10 @@ int main(int argc,char* argv[])
 
   MESSAGE m;
   MESSAGE reponse;
+                                                                                                  /*************************if (mysql_query(connexion, "UPDATE UNIX_FINAL SET stock = 10") != 0)
+                                                                                                        {
+                                                                                                                fprintf (stderr, "Erreur de Mysqlquery\n");
+                                                                                                   }********************$*/
 
   while(1)
   {
@@ -135,7 +139,7 @@ int main(int argc,char* argv[])
 
                         if (qtedemandee > qtedispo)
                         {
-                         sprintf(m.data3,"0"); // condition donne par le prof , on renvoi 0 quand pas possible 
+                         sprintf(reponse.data3,"0"); // condition donne par le prof , on renvoi 0 quand pas possible 
                         }
                         else
                         {
@@ -166,9 +170,19 @@ int main(int argc,char* argv[])
 
       case CANCEL :   // TO DO
                       fprintf(stderr,"(ACCESBD %d) Requete CANCEL reçue de %d\n",getpid(),m.expediteur);
-                      // Acces BD
 
-                      // Mise à jour du stock en BD
+                       newqte= atoi(m.data2);
+                      sprintf(requete,"UPDATE UNIX_FINAL SET stock = stock + %d where id = %d", newqte, m.data1);
+                      fprintf(stderr,"%s  Envoye a la BDD\n",requete);
+                      if (mysql_query(connexion, requete) != 0)
+                      {
+                        fprintf (stderr, "Erreur de Mysqlquery\n");
+                      }
+
+                      if(mysql_store_result(connexion) == NULL)
+                      {
+                        fprintf (stderr, "Erreur de mysqlstoreresult\n");
+                      }
                       break;
 
     }

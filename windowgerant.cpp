@@ -10,6 +10,15 @@ using namespace std;
 #include <sys/sem.h>
 #include "protocole.h"
 
+union semun
+{
+    int val;
+    struct semid_ds *buf;
+    unsigned short *array;
+} arg;
+
+struct sembuf action[1];
+char Pub[51];
 int idArticleSelectionne = -1;
 MYSQL *connexion;
 MYSQL_RES  *resultat;
@@ -38,13 +47,29 @@ WindowGerant::WindowGerant(QWidget *parent) : QMainWindow(parent),ui(new Ui::Win
 
     // Recuperation de la file de message
     // TO DO
-
+    if ((idQ = msgget(CLE,0)) == -1)
+    {
+        perror("(GERANT) Erreur de msgget");
+        exit(1);
+    }
     // Récupération du sémaphore
     // TO DO
-
+    if ((idSem = semget(CLE,0,0)) == -1)
+    {
+        perror("Erreur de semget");
+        exit(1);
+    }
     // Prise blocante du semaphore
     // TO DO
+    action[0].sem_num = 0;
+    action[0].sem_op = -1;
+    action[0].sem_flg = 0;
 
+    if (semop(idSem, action, 1) == -1)
+    {
+        printf ("Erreur de prise de semaphore\n");
+        exit (1);
+    }
     // Connexion à la base de donnée
     connexion = mysql_init(NULL);
     fprintf(stderr,"(GERANT %d) Connexion à la BD\n",getpid());
@@ -56,12 +81,28 @@ WindowGerant::WindowGerant(QWidget *parent) : QMainWindow(parent),ui(new Ui::Win
 
     // Recuperation des articles en BD
     // TO DO
+     sprintf(requete,"select * from UNIX_FINAL");
+    if (mysql_query(connexion, requete) != 0)
+    {
+        printf ("Erreur de Mysql-query");
+    }
 
-    // Exemples à supprimer
-    ajouteArticleTablePanier(1,"pommes",2.53,25);
-    ajouteArticleTablePanier(2,"oranges",5.83,1);
-    ajouteArticleTablePanier(3,"bananes",1.85,12);
-    ajouteArticleTablePanier(4,"cerises",5.44,17);
+    if((resultat = mysql_store_result(connexion)) == NULL)
+    {
+        printf ("Erreur de mysql store");
+    }
+
+    
+    while ((Tuple = mysql_fetch_row(resultat)) != NULL)
+    {
+         char Prix[20];
+      strcpy(Prix,Tuple[2]);
+      string tmp(Prix);
+      size_t x = tmp.find(".");
+      if (x != string::npos) tmp.replace(x,1,",");
+      strcpy(Prix , tmp.data() );
+     ajouteArticleTablePanier(atoi(Tuple[0]),Tuple[1], atof(Prix), atoi(Tuple[3]));
+    }
 }
 
 WindowGerant::~WindowGerant()
@@ -171,6 +212,14 @@ void WindowGerant::closeEvent(QCloseEvent *event)
 
   // Liberation du semaphore
   // TO DO
+  action[0].sem_num = 0;
+  action[0].sem_op = +1;
+
+  if (semop(idSem, action, 1) == -1)
+  {
+    printf ("Erreur au niveau de rendre le semaphore\n");
+    exit (1);
+  }  
 
   exit(0);
 }
@@ -182,7 +231,37 @@ void WindowGerant::on_pushButtonPublicite_clicked()
 {
   fprintf(stderr,"(GERANT %d) Clic sur bouton Mettre a jour\n",getpid());
   // TO DO (étape 7)
-  // Envoi d'une requete NEW_PUB au serveur
+  MESSAGE msg;
+  int taille ;
+  taille = strlen(getPublicite());
+  if (taille < 51 && taille > 0)
+  {
+   strcpy(Pub, getPublicite());
+   for (int i = 1; i < 51; i++)
+   {
+     if (Pub[i] == '\0')
+     {
+       for (i=i;i<51;i++)Pub[i] = ' ';
+     }
+    }
+    Pub[51]='\0';
+    msg.type = 1;
+    msg.expediteur = getpid();
+    msg.requete = NEW_PUB;
+    strcpy (msg.data4, Pub);
+
+    if (msgsnd(idQ,&msg,sizeof(MESSAGE)-sizeof(long),0) == -1)
+    {
+        perror("(GERANT) Erreur de msgsnd - 4");
+        msgctl(idQ,IPC_RMID,NULL);
+        exit(1);
+    }
+
+  }
+  else 
+  {
+    fprintf(stderr,"votre pub contient trop de cracatere !\n");
+  }
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -190,17 +269,56 @@ void WindowGerant::on_pushButtonModifier_clicked()
 {
   fprintf(stderr,"(GERANT %d) Clic sur bouton Modifier\n",getpid());
   // TO DO
-  //cerr << "Prix  : --"  << getPrix() << "--" << endl;
-  //cerr << "Stock : --"  << getStock() << "--" << endl;
+  cerr << "Prix  : --"  << getPrix() << "--" << endl;
+  cerr << "Stock : --"  << getStock() << "--" << endl;
 
   char Prix[20];
   sprintf(Prix,"%f",getPrix());
   string tmp(Prix);
   size_t x = tmp.find(",");
   if (x != string::npos) tmp.replace(x,1,".");
+  strcpy(Prix , tmp.data() );
 
   fprintf(stderr,"(GERANT %d) Modification en base de données pour id=%d\n",getpid(),idArticleSelectionne);
 
+  sprintf(requete,"UPDATE UNIX_FINAL SET prix = %s where id = %d",Prix, idArticleSelectionne);
+
+    if (mysql_query(connexion, requete) != 0)
+    {
+      printf ("Erreur de Mysql-query prix ");
+    }
+    sprintf(requete,"UPDATE UNIX_FINAL SET stock = %d where id = %d", getStock(), idArticleSelectionne);
+    if (mysql_query(connexion, requete) != 0)
+    {
+         printf ("Erreur de Mysql-query stock");
+    }
+
+
+    WindowGerant::videTableStock();
+
   // Mise a jour table BD
   // TO DO
+         sprintf(requete,"select * from UNIX_FINAL");
+    if (mysql_query(connexion, requete) != 0)
+    {
+        printf ("Erreur de Mysql-query");
+    }
+
+    if((resultat = mysql_store_result(connexion)) == NULL)
+    {
+        printf ("Erreur de mysql store");
+    }
+
+    
+    while ((Tuple = mysql_fetch_row(resultat)) != NULL)
+    {
+      strcpy(Prix,Tuple[2]);
+      string tmp(Prix);
+      size_t x = tmp.find(".");
+      if (x != string::npos) tmp.replace(x,1,",");
+      strcpy(Prix , tmp.data() );
+
+
+     ajouteArticleTablePanier(atoi(Tuple[0]),Tuple[1], atof(Prix), atoi(Tuple[3]));
+    }
 }
