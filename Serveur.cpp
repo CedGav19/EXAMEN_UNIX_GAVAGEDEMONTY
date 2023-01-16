@@ -223,7 +223,7 @@ int main()
                             {
                               strcpy(m.data4,"«Client  déjà  existant!»");
                               m.data1=0;
-                              }
+                            }
                             else 
                             {
                               strcpy(m.data4,"«Nouveau client créé:bienvenue!»");

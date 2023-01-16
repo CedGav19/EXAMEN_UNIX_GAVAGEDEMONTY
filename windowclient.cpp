@@ -628,13 +628,13 @@ void handlerSIGUSR1(int sig)
         case LOGIN :
                     // affichage de login
                      fprintf(stderr,"(CLIENT %d) Requete login reçue de %d\n",getpid(),m.expediteur);
+                     w->dialogueMessage("LOGIN",m.data4);
                     if (m.data1==1)
                     {
                       w->loginOK();
                       logged=1;
-
                       
-                      w->dialogueMessage("LOGIN",m.data4);
+                      
                       // dmd de reception du panier
                       m.type = 1;
                       m.requete = CONSULT;
