@@ -548,6 +548,20 @@ void WindowClient::on_pushButtonSupprimer_clicked()
       exit(1);
       }
 
+      msg.type = 1;
+    msg.requete = CONSULT;
+    msg.expediteur = getpid();
+    msg.data1 = (articleEnCours.id);
+
+
+    if (msgsnd(idQ,&msg,sizeof(MESSAGE)-sizeof(long),0) == -1)
+    {
+        perror("(Client) Erreur de msgsnd");
+        msgctl(idQ,IPC_RMID,NULL);
+        exit(1);
+    }
+
+
     }
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -581,6 +595,20 @@ void WindowClient::on_pushButtonViderPanier_clicked()
     msgctl(idQ,IPC_RMID,NULL);
     exit(1);
     }
+
+     msg.type = 1;
+    msg.requete = CONSULT;
+    msg.expediteur = getpid();
+    msg.data1 = (articleEnCours.id);
+
+
+    if (msgsnd(idQ,&msg,sizeof(MESSAGE)-sizeof(long),0) == -1)
+    {
+        perror("(Client) Erreur de msgsnd");
+        msgctl(idQ,IPC_RMID,NULL);
+        exit(1);
+    }
+
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -608,6 +636,8 @@ void WindowClient::on_pushButtonPayer_clicked()
     w->videTablePanier();
     totalCaddie = 0.0;
     w->setTotal(-1.0);
+
+
 
     // Envoi requete CADDIE au serveur
 }
@@ -687,7 +717,18 @@ void handlerSIGUSR1(int sig)
                           // On vide le panir pour qu'il puisse être mis à jour.
                       w->videTablePanier();
                       totalCaddie = 0; //tot a payer 
-                    
+                        m.type = 1;
+                        m.requete = CONSULT;
+                        m.expediteur = getpid();
+                        m.data1 = (articleEnCours.id);
+
+
+                        if (msgsnd(idQ,&m,sizeof(MESSAGE)-sizeof(long),0) == -1)
+                        {
+                            perror("(Client) Erreur de msgsnd");
+                            msgctl(idQ,IPC_RMID,NULL);
+                            exit(1);
+                        }
                     }
                     break;
 
@@ -697,6 +738,8 @@ void handlerSIGUSR1(int sig)
                      tmpqte =atof(m.data3);
                       totalCaddie = totalCaddie+  tmpqte*m.data5; 
                       w->setTotal(totalCaddie);
+
+
                     break;
 
          case TIME_OUT : // TO DO (étape 6)

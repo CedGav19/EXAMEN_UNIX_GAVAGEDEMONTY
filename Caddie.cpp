@@ -107,7 +107,7 @@ int main(int argc,char* argv[])
                     }
                     else 
                     {
-                        if ( m.data1!=-1 &&(stock = atoi(m.data3)) > 0)
+                        if ( m.data1!=-1 &&(stock = atoi(m.data3)) >=  0)
                         {
                           m.expediteur = getpid();
                           m.type = pidClient;
